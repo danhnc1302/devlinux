@@ -4,10 +4,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stddef.h>
+#include <errno.h>
 
 #define FILE_NAME "products.dat"
 
-typedef struct {
+typedef struct
+{
     int id;
     char name[64];
     int quantity;
@@ -19,26 +21,60 @@ void add_product(int fd)
     Product p;
 
     printf("Enter ID: ");
-    scanf("%d", &p.id);
+    if (scanf("%d", &p.id) != 1)
+    {
+        fprintf(stderr, "Invalid ID input\n");
+        return;
+    }
 
     printf("Enter Name: ");
-    scanf(" %63[^\n]", p.name);
+    if (scanf(" %63[^\n]", p.name) != 1)
+    {
+        fprintf(stderr, "Invalid Name input\n");
+        return;
+    }
 
     printf("Enter Quantity: ");
-    scanf("%d", &p.quantity);
+    if (scanf("%d", &p.quantity) != 1)
+    {
+        fprintf(stderr, "Invalid Quantity input\n");
+        return;
+    }
 
     printf("Enter Price: ");
-    scanf("%lf", &p.price);
+    if (scanf("%lf", &p.price) != 1)
+    {
+        fprintf(stderr, "Invalid Price input\n");
+        return;
+    }
 
-    if (lseek(fd, 0, SEEK_END) == -1) {
+    if (lseek(fd, 0, SEEK_END) == -1)
+    {
         perror("lseek");
         return;
     }
 
-    if (write(fd, &p, sizeof(Product)) != sizeof(Product))
+    ssize_t written = 0;
+    char *buf = (char *)&p;
+
+    while (written < (ssize_t)sizeof(Product))
     {
-        perror("write");
-        return;
+        ssize_t n = write(fd,
+                          buf + written,
+                          sizeof(Product) - written);
+
+        if (n < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            perror("write");
+            return;
+        }
+
+        written += n;
     }
 
     printf("Product added successfully.\n");
@@ -50,20 +86,48 @@ void show_product_by_index(int fd)
     Product p;
 
     printf("Enter index: ");
-    scanf("%d", &index);
 
-    off_t offset = (off_t)index * sizeof(Product);
-    if (offset < 0) {
-        printf("Invalid index: must be >= 0\n");
+    if (scanf("%d", &index) != 1)
+    {
+        fprintf(stderr, "Invalid index input\n");
         return;
     }
 
-    if (lseek(fd, offset, SEEK_SET) == -1) {
+    if (index < 0)
+    {
+        printf("Invalid index.\n");
+        return;
+    }
+
+    off_t offset = (off_t)index * sizeof(Product);
+
+    if (lseek(fd, offset, SEEK_SET) == -1)
+    {
         perror("lseek");
         return;
     }
 
-    if (read(fd, &p, sizeof(Product)) != sizeof(Product))
+    ssize_t n;
+
+    while (1)
+    {
+        n = read(fd, &p, sizeof(Product));
+
+        if (n < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            perror("read");
+            return;
+        }
+
+        break;
+    }
+
+    if (n != (ssize_t)sizeof(Product))
     {
         printf("Invalid index.\n");
         return;
@@ -82,10 +146,26 @@ void update_quantity(int fd)
     int new_quantity;
 
     printf("Enter index: ");
-    scanf("%d", &index);
+
+    if (scanf("%d", &index) != 1)
+    {
+        fprintf(stderr, "Invalid index input\n");
+        return;
+    }
 
     printf("Enter new quantity: ");
-    scanf("%d", &new_quantity);
+
+    if (scanf("%d", &new_quantity) != 1)
+    {
+        fprintf(stderr, "Invalid quantity input\n");
+        return;
+    }
+
+    if (index < 0)
+    {
+        printf("Invalid index.\n");
+        return;
+    }
 
     off_t record_offset = (off_t)index * sizeof(Product);
 
@@ -98,10 +178,27 @@ void update_quantity(int fd)
         return;
     }
 
-    if (write(fd, &new_quantity, sizeof(int)) != sizeof(int))
+    ssize_t written = 0;
+    char *buf = (char *)&new_quantity;
+
+    while (written < (ssize_t)sizeof(int))
     {
-        perror("write");
-        return;
+        ssize_t n = write(fd,
+                          buf + written,
+                          sizeof(int) - written);
+
+        if (n < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            perror("write");
+            return;
+        }
+
+        written += n;
     }
 
     printf("Quantity updated successfully.\n");
@@ -111,12 +208,40 @@ void list_all_products(int fd)
 {
     Product p;
 
-    lseek(fd, 0, SEEK_SET);
+    if (lseek(fd, 0, SEEK_SET) == -1)
+    {
+        perror("lseek");
+        return;
+    }
 
     printf("\n===== PRODUCT LIST =====\n");
 
-    while (read(fd, &p, sizeof(Product)) == sizeof(Product))
+    while (1)
     {
+        ssize_t n = read(fd, &p, sizeof(Product));
+
+        if (n < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            perror("read");
+            return;
+        }
+
+        if (n == 0)
+        {
+            break;
+        }
+
+        if (n != (ssize_t)sizeof(Product))
+        {
+            fprintf(stderr, "Partial record detected.\n");
+            break;
+        }
+
         printf("ID       : %d\n", p.id);
         printf("Name     : %s\n", p.name);
         printf("Quantity : %d\n", p.quantity);
@@ -125,7 +250,7 @@ void list_all_products(int fd)
     }
 }
 
-int main()
+int main(void)
 {
     int choice;
 
@@ -147,10 +272,15 @@ int main()
         printf("5. Exit\n");
         printf("Choose: ");
 
-        if (scanf("%d", &choice) != 1) {
-            fprintf(stderr, "Invalid input\n");
+        if (scanf("%d", &choice) != 1)
+        {
+            fprintf(stderr, "Invalid menu input\n");
+
             int c;
-            while ((c = getchar()) != '\n' && c != EOF);
+            while ((c = getchar()) != '\n' && c != EOF)
+            {
+            }
+
             continue;
         }
 
@@ -173,14 +303,18 @@ int main()
                 break;
 
             case 5:
-                if (close(fd) == -1) {
+                if (close(fd) == -1)
+                {
                     perror("close");
                     return 1;
                 }
+
+                printf("Goodbye!\n");
                 return 0;
 
             default:
                 printf("Invalid choice.\n");
+                break;
         }
     }
 

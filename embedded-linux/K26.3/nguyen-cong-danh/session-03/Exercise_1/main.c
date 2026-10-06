@@ -20,26 +20,30 @@ void add_student(int fd)
     Student st;
 
     printf("Enter ID: ");
-    if (scanf("%d", &st.id) != 1) {
+    if (scanf("%d", &st.id) != 1)
+    {
         fprintf(stderr, "Invalid ID input\n");
         return;
     }
 
     printf("Enter Name: ");
-    if (scanf(" %63[^\n]", st.name) != 1) {
-        fprintf(stderr, "Invalid ID input\n");
+    if (scanf(" %63[^\n]", st.name) != 1)
+    {
+        fprintf(stderr, "Invalid Name input\n");
         return;
     }
 
     printf("Enter Age: ");
-    if (scanf("%d", &st.age) != 1) {
-        fprintf(stderr, "Invalid ID input\n");
+    if (scanf("%d", &st.age) != 1)
+    {
+        fprintf(stderr, "Invalid Age input\n");
         return;
     }
 
     printf("Enter GPA: ");
-    if (scanf("%f", &st.gpa) != 1) {
-        fprintf(stderr, "Invalid ID input\n");
+    if (scanf("%f", &st.gpa) != 1)
+    {
+        fprintf(stderr, "Invalid GPA input\n");
         return;
     }
 
@@ -63,7 +67,7 @@ void add_student(int fd)
         {
             if (errno == EINTR)
             {
-                continue; /* retry */
+                continue;
             }
 
             perror("write");
@@ -79,7 +83,6 @@ void add_student(int fd)
 void list_students(int fd)
 {
     Student st;
-    ssize_t n;
 
     if (lseek(fd, 0, SEEK_SET) == -1)
     {
@@ -89,11 +92,27 @@ void list_students(int fd)
 
     printf("\n===== STUDENT LIST =====\n");
 
-retry:
-
-    while ((n = read(fd, &st, sizeof(Student))) > 0)
+    while (1)
     {
-        if (n != sizeof(Student))
+        ssize_t n = read(fd, &st, sizeof(Student));
+
+        if (n < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            perror("read");
+            return;
+        }
+
+        if (n == 0)
+        {
+            break;
+        }
+
+        if (n != (ssize_t)sizeof(Student))
         {
             fprintf(stderr, "Partial record detected.\n");
             break;
@@ -105,16 +124,6 @@ retry:
         printf("GPA  : %.2f\n", st.gpa);
         printf("------------------------\n");
     }
-
-    if (n < 0)
-    {
-        if (errno == EINTR)
-        {
-            goto retry;
-        }
-
-        perror("read");
-    }
 }
 
 void find_student(int fd)
@@ -122,10 +131,14 @@ void find_student(int fd)
     int target_id;
     int found = 0;
     Student st;
-    ssize_t n;
 
     printf("Enter ID to find: ");
-    scanf("%d", &target_id);
+
+    if (scanf("%d", &target_id) != 1)
+    {
+        fprintf(stderr, "Invalid ID input\n");
+        return;
+    }
 
     if (lseek(fd, 0, SEEK_SET) == -1)
     {
@@ -133,14 +146,30 @@ void find_student(int fd)
         return;
     }
 
-retry:
-
-    while ((n = read(fd, &st, sizeof(Student))) > 0)
+    while (1)
     {
-        if (n != sizeof(Student))
+        ssize_t n = read(fd, &st, sizeof(Student));
+
+        if (n < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            perror("read");
+            return;
+        }
+
+        if (n == 0)
+        {
+            break;
+        }
+
+        if (n != (ssize_t)sizeof(Student))
         {
             fprintf(stderr, "Partial record detected.\n");
-            break;
+            return;
         }
 
         if (st.id == target_id)
@@ -154,17 +183,6 @@ retry:
             found = 1;
             break;
         }
-    }
-
-    if (n < 0)
-    {
-        if (errno == EINTR)
-        {
-            goto retry;
-        }
-
-        perror("read");
-        return;
     }
 
     if (!found)
@@ -195,7 +213,7 @@ int main(void)
 
         if (scanf("%d", &choice) != 1)
         {
-            fprintf(stderr, "Invalid input.\n");
+            fprintf(stderr, "Invalid menu input\n");
 
             if (close(fd) == -1)
             {
