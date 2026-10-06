@@ -30,7 +30,10 @@ void add_product(int fd)
     printf("Enter Price: ");
     scanf("%lf", &p.price);
 
-    lseek(fd, 0, SEEK_END);
+    if (lseek(fd, 0, SEEK_END) == -1) {
+        perror("lseek");
+        return;
+    }
 
     if (write(fd, &p, sizeof(Product)) != sizeof(Product))
     {
@@ -54,7 +57,7 @@ void show_product_by_index(int fd)
         printf("Invalid index: must be >= 0\n");
         return;
     }
-    
+
     if (lseek(fd, offset, SEEK_SET) == -1) {
         perror("lseek");
         return;
@@ -144,7 +147,12 @@ int main()
         printf("5. Exit\n");
         printf("Choose: ");
 
-        scanf("%d", &choice);
+        if (scanf("%d", &choice) != 1) {
+            fprintf(stderr, "Invalid input\n");
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+            continue;
+        }
 
         switch (choice)
         {

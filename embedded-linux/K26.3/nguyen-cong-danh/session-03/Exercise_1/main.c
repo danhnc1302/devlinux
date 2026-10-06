@@ -20,16 +20,28 @@ void add_student(int fd)
     Student st;
 
     printf("Enter ID: ");
-    scanf("%d", &st.id);
+    if (scanf("%d", &st.id) != 1) {
+        fprintf(stderr, "Invalid ID input\n");
+        return;
+    }
 
     printf("Enter Name: ");
-    scanf(" %63[^\n]", st.name);
+    if (scanf(" %63[^\n]", st.name) != 1) {
+        fprintf(stderr, "Invalid ID input\n");
+        return;
+    }
 
     printf("Enter Age: ");
-    scanf("%d", &st.age);
+    if (scanf("%d", &st.age) != 1) {
+        fprintf(stderr, "Invalid ID input\n");
+        return;
+    }
 
     printf("Enter GPA: ");
-    scanf("%f", &st.gpa);
+    if (scanf("%f", &st.gpa) != 1) {
+        fprintf(stderr, "Invalid ID input\n");
+        return;
+    }
 
     if (lseek(fd, 0, SEEK_END) == -1)
     {
