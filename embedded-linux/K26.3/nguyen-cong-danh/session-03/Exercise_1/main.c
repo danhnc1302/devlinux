@@ -3,10 +3,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #define FILE_NAME "students.dat"
 
-typedef struct {
+typedef struct
+{
     int id;
     char name[64];
     int age;
@@ -29,12 +31,34 @@ void add_student(int fd)
     printf("Enter GPA: ");
     scanf("%f", &st.gpa);
 
-    lseek(fd, 0, SEEK_END);
-
-    if (write(fd, &st, sizeof(Student)) != sizeof(Student))
+    if (lseek(fd, 0, SEEK_END) == -1)
     {
-        perror("write");
+        perror("lseek");
         return;
+    }
+
+    ssize_t written = 0;
+    ssize_t total_size = sizeof(Student);
+    char *ptr = (char *)&st;
+
+    while (written < total_size)
+    {
+        ssize_t n = write(fd,
+                          ptr + written,
+                          total_size - written);
+
+        if (n < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue; /* retry */
+            }
+
+            perror("write");
+            return;
+        }
+
+        written += n;
     }
 
     printf("Student added successfully.\n");
@@ -43,34 +67,70 @@ void add_student(int fd)
 void list_students(int fd)
 {
     Student st;
+    ssize_t n;
 
-    lseek(fd, 0, SEEK_SET);
+    if (lseek(fd, 0, SEEK_SET) == -1)
+    {
+        perror("lseek");
+        return;
+    }
 
     printf("\n===== STUDENT LIST =====\n");
 
-    while (read(fd, &st, sizeof(Student)) == sizeof(Student))
+retry:
+
+    while ((n = read(fd, &st, sizeof(Student))) > 0)
     {
+        if (n != sizeof(Student))
+        {
+            fprintf(stderr, "Partial record detected.\n");
+            break;
+        }
+
         printf("ID   : %d\n", st.id);
         printf("Name : %s\n", st.name);
         printf("Age  : %d\n", st.age);
         printf("GPA  : %.2f\n", st.gpa);
         printf("------------------------\n");
     }
+
+    if (n < 0)
+    {
+        if (errno == EINTR)
+        {
+            goto retry;
+        }
+
+        perror("read");
+    }
 }
 
 void find_student(int fd)
 {
     int target_id;
-    Student st;
     int found = 0;
+    Student st;
+    ssize_t n;
 
     printf("Enter ID to find: ");
     scanf("%d", &target_id);
 
-    lseek(fd, 0, SEEK_SET);
-
-    while (read(fd, &st, sizeof(Student)) == sizeof(Student))
+    if (lseek(fd, 0, SEEK_SET) == -1)
     {
+        perror("lseek");
+        return;
+    }
+
+retry:
+
+    while ((n = read(fd, &st, sizeof(Student))) > 0)
+    {
+        if (n != sizeof(Student))
+        {
+            fprintf(stderr, "Partial record detected.\n");
+            break;
+        }
+
         if (st.id == target_id)
         {
             printf("\nStudent found:\n");
@@ -82,6 +142,17 @@ void find_student(int fd)
             found = 1;
             break;
         }
+    }
+
+    if (n < 0)
+    {
+        if (errno == EINTR)
+        {
+            goto retry;
+        }
+
+        perror("read");
+        return;
     }
 
     if (!found)
@@ -110,7 +181,17 @@ int main(void)
         printf("4. Exit\n");
         printf("Choose: ");
 
-        scanf("%d", &choice);
+        if (scanf("%d", &choice) != 1)
+        {
+            fprintf(stderr, "Invalid input.\n");
+
+            if (close(fd) == -1)
+            {
+                perror("close");
+            }
+
+            return 1;
+        }
 
         switch (choice)
         {
@@ -127,12 +208,18 @@ int main(void)
                 break;
 
             case 4:
-                close(fd);
+                if (close(fd) == -1)
+                {
+                    perror("close");
+                    return 1;
+                }
+
                 printf("Goodbye!\n");
                 return 0;
 
             default:
                 printf("Invalid choice.\n");
+                break;
         }
     }
 

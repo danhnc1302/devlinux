@@ -50,9 +50,12 @@ void show_product_by_index(int fd)
     scanf("%d", &index);
 
     off_t offset = (off_t)index * sizeof(Product);
-
-    if (lseek(fd, offset, SEEK_SET) == -1)
-    {
+    if (offset < 0) {
+        printf("Invalid index: must be >= 0\n");
+        return;
+    }
+    
+    if (lseek(fd, offset, SEEK_SET) == -1) {
         perror("lseek");
         return;
     }
@@ -162,7 +165,10 @@ int main()
                 break;
 
             case 5:
-                close(fd);
+                if (close(fd) == -1) {
+                    perror("close");
+                    return 1;
+                }
                 return 0;
 
             default:
